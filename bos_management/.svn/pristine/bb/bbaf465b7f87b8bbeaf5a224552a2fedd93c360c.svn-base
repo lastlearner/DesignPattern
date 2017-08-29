@@ -1,0 +1,323 @@
+package com.itheima.bos.web.action.base;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.poi.hssf.usermodel.HSSFRow;
+import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.struts2.ServletActionContext;
+import org.apache.struts2.convention.annotation.Action;
+import org.apache.struts2.convention.annotation.Namespace;
+import org.apache.struts2.convention.annotation.ParentPackage;
+import org.apache.struts2.convention.annotation.Result;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Controller;
+
+import com.itheima.bos.domain.base.Courier;
+import com.itheima.bos.domain.base.FixedArea;
+import com.itheima.bos.domain.base.SubArea;
+import com.itheima.bos.service.base.CourierService;
+import com.itheima.bos.service.base.FixedAreaService;
+import com.itheima.bos.service.base.SubareaService;
+import com.itheima.bos.utils.FileUtils;
+import com.itheima.bos.web.action.common.CommonAction;
+import com.itheima.crm.service.Customer;
+import com.itheima.crm.service.CustomerService;
+
+import net.sf.jasperreports.engine.JRExporterParameter;
+import net.sf.jasperreports.engine.JasperCompileManager;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
+import net.sf.jasperreports.engine.export.JRPdfExporter;
+
+/**
+ * 定区管理
+ */
+@Namespace("/")
+@ParentPackage("struts-default")
+@Controller
+@Scope("prototype")
+public class FixedAreaAction extends CommonAction<FixedArea>{
+	@Autowired
+	private FixedAreaService service;
+	
+	
+	/**
+	 * 定区添加方法
+	 */
+	@Action(value="fixedAreaAction_save",
+			results={@Result(name="success",type="redirect",location="/pages/base/fixed_area.jsp")})
+	public String save(){
+		service.save(getModel());
+		return SUCCESS;
+	}
+	
+	/**
+	 * 分页查询方法
+	 * @throws IOException 
+	 */
+	@Action(value="fixedAreaAction_pageQuery")
+	public String pageQuery() throws IOException{
+		//封装spring data JPA分页查询所需的Pageable
+		Pageable pageable = new PageRequest(page - 1, rows);
+		Page<FixedArea> page = service.pageQuery(pageable);
+		page2json(page, new String[]{"subareas","couriers"});
+		return NONE;
+	}
+	
+	//注入CRM客户端代理对象
+	@Autowired
+	private CustomerService crmClientProxy;
+	
+	/**
+	 * 通过客户端代理对象远程调用CRM服务获得未关联到定区的客户
+	 * @return
+	 */
+	@Action(value="fixedAreaAction_findCustomersNotAssociation")
+	public String findCustomersNotAssociation(){
+		List<Customer> list = crmClientProxy.findCustomersNotAssociation();
+		list2json(list, null);
+		return NONE;
+	}
+	
+	/**
+	 * 通过客户端代理对象远程调用CRM服务获得已经关联到指定定区的客户
+	 * @return
+	 */
+	@Action(value="fixedAreaAction_findCustomersHasAssociation")
+	public String findCustomersHasAssociation(){
+		List<Customer> list = crmClientProxy.findCustomersHasAssociation(getModel().getId());
+		list2json(list, null);
+		return NONE;
+	}
+	
+	//通过属性驱动接收表单提交的多个客户id
+	private List<Integer> customerIds;
+	
+	public void setCustomerIds(List<Integer> customerIds) {
+		this.customerIds = customerIds;
+	}
+
+	/**
+	 * 通过客户端代理对象远程调用CRM服务实现定区关联客户
+	 * @return
+	 */
+	@Action(value="fixedAreaAction_assignCustomers2FixedArea",
+			results={@Result(name="success",type="redirect",
+			location="/pages/base/fixed_area.jsp")})
+	public String assignCustomers2FixedArea(){
+		crmClientProxy.assignCustomers2FixedArea(getModel().getId(), customerIds);
+		return SUCCESS;
+	}
+	
+	//属性驱动，接收快递员id、收派时间id
+	private Integer courierId;
+	
+	private Integer takeTimeId;
+	
+	public void setCourierId(Integer courierId) {
+		this.courierId = courierId;
+	}
+
+	public void setTakeTimeId(Integer takeTimeId) {
+		this.takeTimeId = takeTimeId;
+	}
+	
+	/**
+	 * 定区关联快递员
+	 */
+	@Action(value="fixedAreaAction_associationCourier2FixedArea",
+			results={@Result(name="success",type="redirect",
+			location="/pages/base/fixed_area.jsp")})
+	public String associationCourier2FixedArea(){
+		service.associationCourier2FixedArea(getModel().getId(),courierId,takeTimeId);
+		return SUCCESS;
+	}
+	
+	private String ids;
+
+	public void setIds(String ids) {
+		this.ids = ids;
+	}
+
+	@Action(value="fixedAreaAction_exportPDF")
+	public String exportPDF() throws Exception{
+		
+		String[] split = ids.split(",");
+		List<Customer> customers = new ArrayList<Customer>();
+		for (String id : split) {
+			List<Customer> list = crmClientProxy.findCustomersHasAssociation(id);
+			if(list!=null){
+				for (Customer customer : list) {
+					FixedArea fixedArea = service.findById(customer.getFixedAreaId());
+					customer.setFixedAreaId(fixedArea.getFixedAreaName());
+				}
+				customers.addAll(list);
+			}
+		}
+		String jrxml = ServletActionContext.getServletContext().getRealPath("/template/crm.jrxml");
+		// 准备需要数据
+		Map<String, Object> parameters = new HashMap<String, Object>();
+		parameters.put("company", "传智播客");
+		// 准备需要数据
+		JasperReport report = JasperCompileManager.compileReport(jrxml);
+		JasperPrint jasperPrint = JasperFillManager.fillReport(report, parameters, new JRBeanCollectionDataSource(customers));
+
+		HttpServletResponse response = ServletActionContext.getResponse();
+		OutputStream ouputStream = response.getOutputStream();
+		// 设置相应参数，以附件形式保存PDF
+		response.setContentType("application/pdf");
+		response.setCharacterEncoding("UTF-8");
+		response.setHeader("Content-Disposition", "attachment; filename=" + FileUtils.encodeDownloadFilename("分区数据.pdf",
+				ServletActionContext.getRequest().getHeader("user-agent")));
+		// 使用JRPdfExproter导出器导出pdf
+		JRPdfExporter exporter = new JRPdfExporter();
+		exporter.setParameter(JRExporterParameter.JASPER_PRINT, jasperPrint);
+		exporter.setParameter(JRExporterParameter.OUTPUT_STREAM, ouputStream);
+		exporter.exportReport();// 导出
+		ouputStream.close();// 关闭流
+		
+		return NONE;
+	}
+	
+	@Autowired
+	private SubareaService subAreaService;
+	
+	private List<String> subAreaIds;
+
+	public void setSubAreaIds(List<String> subAreaIds) {
+		this.subAreaIds = subAreaIds;
+	}
+	/**
+	 * 查询所有与某定区关联的分区
+	 * @return
+	 * @throws Exception
+	 */
+	@Action(value="fixedAreaAction_findAllSubAreaHasAssociation")
+	public String findAllSubAreaHasAssociation() throws Exception {
+		List<SubArea> list = subAreaService.findAllSubAreaHasAssosiation(getModel().getId());
+		list2json(list,new String[]{"subareas","fixedArea"});  
+		return NONE;
+	}
+	
+	/**
+	 * 查询所有未与定区关联的分区
+	 * @return
+	 * @throws Exception
+	 */
+	@Action(value="fixedAreaAction_findAllSubAreaNoAssociation")
+	public String findAllSubAreaNoAssociation() throws Exception {
+		List<SubArea> list = subAreaService.findAllSubAreaNoAssosiation();
+		list2json(list, new String[]{"subareas","fixedArea"});//TODO  不能显示省市区Area装json空指针
+		return NONE;
+	}
+	
+	/**
+	 * 定区与一批分区关联
+	 * @return
+	 * @throws Exception
+	 */
+	@Action(value="fixedAreaAction_assignSubAreas2FixedArea",results={@Result(name="success",type="redirect",location="/pages/base/fixed_area.jsp")})
+	public String assignSubAreas2FixedArea() throws Exception {
+		subAreaService.assignSubAreas2FixedArea(getModel().getId(),subAreaIds);
+		return SUCCESS;
+	}
+	
+
+	@Autowired
+	private CourierService courierService;
+	/**
+	 * 查询所有与某定区关联的快递员
+	 * @return
+	 * @throws Exception
+	 */
+	@Action(value="fixedAreaAction_findAllCourierHasAssociation")
+	public String findAllCourierHasAssociation() throws Exception {
+		List<Courier> list = courierService.findAllCourierHasAssosiation(getModel().getId());
+		list2json(list, new String[]{"standard","takeTime","fixedAreas"});
+		return NONE;
+	}
+	
+	/**
+	 * 定区数据导出Excel
+	 * @return
+	 * @throws IOException 
+	 */
+	@Action(value="fixedAreaAction_exportXls")
+	public String exportXls() throws IOException{
+		//查询数据库,导出所有数据
+		String[] split = ids.split(",");
+		
+		//使用POI将查询到的数据,写入excel中
+		HSSFWorkbook book = new HSSFWorkbook();
+		HSSFSheet sheet = book.createSheet("客户信息");
+		HSSFRow title = sheet.createRow(0);
+		title.createCell(0).setCellValue("客户编号");
+		title.createCell(1).setCellValue("客户名称");
+		title.createCell(2).setCellValue("所属单位");
+		
+		for (String id : split) {
+			List<Customer> list = crmClientProxy.findCustomersHasAssociation(id);
+			if(list!=null){
+				for (Customer customer : list) {
+					HSSFRow row = sheet.createRow(sheet.getLastRowNum()+1);
+					row.createCell(0).setCellValue(customer.getId());
+					row.createCell(1).setCellValue(customer.getUsername());
+					row.createCell(2).setCellValue(customer.getCompany());
+				}
+			}
+		}
+		
+		//获取输出流将excel数据写至客户端浏览器,提供下载
+		ServletOutputStream out = ServletActionContext.getResponse().getOutputStream();
+		
+		String filename="关联客户表.xls";
+		String contextType = ServletActionContext.getServletContext().getMimeType(filename);
+		String agent = ServletActionContext.getRequest().getHeader("User-Agent");
+		
+		filename=FileUtils.encodeDownloadFilename(filename, agent);
+		ServletActionContext.getResponse().setContentType(contextType);
+		ServletActionContext.getResponse().setHeader("content-disposition", "attchment;filename=" + filename);
+		
+		
+		book.write(out);
+		
+		return NONE;
+	}
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

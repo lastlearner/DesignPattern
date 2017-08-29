@@ -1,0 +1,123 @@
+package com.itheima.bos.web.action.base;
+
+import java.io.IOException;
+import java.util.List;
+
+import org.apache.struts2.convention.annotation.Action;
+import org.apache.struts2.convention.annotation.Namespace;
+import org.apache.struts2.convention.annotation.ParentPackage;
+import org.apache.struts2.convention.annotation.Result;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Controller;
+import com.itheima.bos.domain.base.FixedArea;
+import com.itheima.bos.service.base.FixedAreaService;
+import com.itheima.bos.web.action.common.CommonAction;
+import com.itheima.crm.service.Customer;
+import com.itheima.crm.service.CustomerService;
+
+/**
+ * 定区管理
+ */
+@Namespace("/")
+@ParentPackage("struts-default")
+@Controller
+@Scope("prototype")
+public class FixedAreaAction extends CommonAction<FixedArea>{
+	@Autowired
+	private FixedAreaService service;
+	/**
+	 * 定区添加方法
+	 */
+	@Action(value="fixedAreaAction_save",
+			results={@Result(name="success",type="redirect",location="/pages/base/fixed_area.jsp")})
+	public String save(){
+		service.save(getModel());
+		return SUCCESS;
+	}
+	
+	/**
+	 * 分页查询方法
+	 * @throws IOException 
+	 */
+	@Action(value="fixedAreaAction_pageQuery")
+	public String pageQuery() throws IOException{
+		//封装spring data JPA分页查询所需的Pageable
+		Pageable pageable = new PageRequest(page - 1, rows);
+		Page<FixedArea> page = service.pageQuery(pageable);
+		page2json(page, new String[]{"subareas","couriers"});
+		return NONE;
+	}
+	
+	//注入CRM客户端代理对象
+	@Autowired
+	private CustomerService crmClientProxy;
+	
+	/**
+	 * 通过客户端代理对象远程调用CRM服务获得未关联到定区的客户
+	 * @return
+	 */
+	@Action(value="fixedAreaAction_findCustomersNotAssociation")
+	public String findCustomersNotAssociation(){
+		List<Customer> list = crmClientProxy.findCustomersNotAssociation();
+		list2json(list, null);
+		return NONE;
+	}
+	
+	/**
+	 * 通过客户端代理对象远程调用CRM服务获得已经关联到指定定区的客户
+	 * @return
+	 */
+	@Action(value="fixedAreaAction_findCustomersHasAssociation")
+	public String findCustomersHasAssociation(){
+		List<Customer> list = crmClientProxy.findCustomersHasAssociation(getModel().getId());
+		list2json(list, null);
+		return NONE;
+	}
+	
+	//通过属性驱动接收表单提交的多个客户id
+	private List<Integer> customerIds;
+	
+	public void setCustomerIds(List<Integer> customerIds) {
+		this.customerIds = customerIds;
+	}
+
+	/**
+	 * 通过客户端代理对象远程调用CRM服务实现定区关联客户
+	 * @return
+	 */
+	@Action(value="fixedAreaAction_assignCustomers2FixedArea",
+			results={@Result(name="success",type="redirect",
+			location="/pages/base/fixed_area.jsp")})
+	public String assignCustomers2FixedArea(){
+		crmClientProxy.assignCustomers2FixedArea(getModel().getId(), customerIds);
+		return SUCCESS;
+	}
+	
+	//属性驱动，接收快递员id、收派时间id
+	private Integer courierId;
+	
+	private Integer takeTimeId;
+	
+	public void setCourierId(Integer courierId) {
+		this.courierId = courierId;
+	}
+
+	public void setTakeTimeId(Integer takeTimeId) {
+		this.takeTimeId = takeTimeId;
+	}
+	
+	/**
+	 * 定区关联快递员
+	 */
+	@Action(value="fixedAreaAction_associationCourier2FixedArea",
+			results={@Result(name="success",type="redirect",
+			location="/pages/base/fixed_area.jsp")})
+	public String associationCourier2FixedArea(){
+		service.associationCourier2FixedArea(getModel().getId(),courierId,takeTimeId);
+		return SUCCESS;
+	}
+}

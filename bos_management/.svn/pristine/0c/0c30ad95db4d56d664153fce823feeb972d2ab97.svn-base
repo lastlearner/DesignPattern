@@ -1,0 +1,15 @@
+package com.itheima.bos.service.base;
+
+import java.util.List;
+
+import com.itheima.bos.domain.base.SubArea;
+
+public interface SubareaService {
+
+	public void save(SubArea model);
+
+	public List<SubArea> findAll();
+
+	public List<Object[]> showChart();
+
+}

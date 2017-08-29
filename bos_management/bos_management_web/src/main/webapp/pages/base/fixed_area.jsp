@@ -1,0 +1,698 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>管理定区/调度排班</title>
+		<!-- 导入jquery核心类库 -->
+		<script type="text/javascript" src="../../js/jquery-1.8.3.js"></script>
+		<!-- 导入easyui类库 -->
+		<link rel="stylesheet" type="text/css" href="../../js/easyui/themes/default/easyui.css">
+		<link rel="stylesheet" type="text/css" href="../../js/easyui/themes/icon.css">
+		<link rel="stylesheet" type="text/css" href="../../js/easyui/ext/portal.css">
+		<link rel="stylesheet" type="text/css" href="../../css/default.css">
+		<script type="text/javascript" src="../../js/easyui/jquery.easyui.min.js"></script>
+		<script type="text/javascript" src="../../js/easyui/ext/jquery.portal.js"></script>
+		<script type="text/javascript" src="../../js/easyui/ext/jquery.cookie.js"></script>
+		<script src="../../js/easyui/locale/easyui-lang-zh_CN.js" type="text/javascript"></script>
+		<script type="text/javascript">
+			function doAdd(){
+				$('#addWindow').window("open");
+			}
+			
+			function doEdit(){
+				alert("修改...");
+			}
+			
+			function doDelete(){
+				alert("删除...");
+			}
+			
+			function doSearch(){
+				$('#searchWindow').window("open");
+			}
+
+			function doExportPDF(){
+				var rows = $("#grid").datagrid("getSelections");//[{id:001},{id:002,name:'xxx'}]
+				if(rows.length == 0){
+					//没有选择，弹出提示
+					$.messager.alert("提示信息","至少选择一个定区数据进行导出！","warning");
+				}else{
+					$.messager.confirm("确认信息","你确定要导出选定分区的数据吗？",function(r){
+						if(r){
+						var array = new Array();
+						//确定，需要删除，首先需要将选中快递员id获得，拼接为字符串1,2,3,4
+						for(var i=0;i<rows.length;i++){
+							var id = rows[i].id;
+							array.push(id);
+						}
+						var ids = array.join(",");//将数组对象中所有的元素进行字符串拼接1,2,3,4
+						//发送请求，提交IDS参数
+						window.location.href="../../fixedAreaAction_exportPDF.action?ids=" + ids;
+						}
+					});
+				}
+			}
+			
+			function doExportXls(){
+				var rows = $("#grid").datagrid("getSelections");//[{id:001},{id:002,name:'xxx'}]
+				if(rows.length == 0){
+					//没有选择，弹出提示
+					$.messager.alert("提示信息","至少选择一个定区数据进行导出！","warning");
+				}else{
+					$.messager.confirm("确认信息","你确定要导出选定分区的数据吗？",function(r){
+						if(r){
+							var array = new Array();
+							//确定，需要删除，首先需要将选中快递员id获得，拼接为字符串1,2,3,4
+							for(var i=0;i<rows.length;i++){
+								var id = rows[i].id;
+								array.push(id);
+							}
+							var ids = array.join(",");//将数组对象中所有的元素进行字符串拼接1,2,3,4
+							//发送请求，提交IDS参数
+							window.location.href="../../fixedAreaAction_exportXls.action?ids=" + ids;
+						}
+						
+					});
+				}
+			}
+			
+			function doAssociations(){
+				//关联客户
+				var rows = $("#grid").datagrid("getSelections");
+				if(rows.length != 1){
+					$.messager.alert("提示信息","只能选择一个定区与客户关联！");
+					return;
+				}
+				
+				//加载完数据，再打开窗口
+				$('#customerWindow').window('open');
+				
+				//将关联客户和未关联客户清空
+				$("#noassociationSelect").empty();
+				$("#associationSelect").empty();
+				
+				//异步查询没有与定区关联的所有客户
+				$.post("../../fixedAreaAction_findCustomersNotAssociation.action",function(data){
+					for(var i = 0;i < data.length; i++){
+						var id = data[i].id;
+						var username = data[i].username;
+						var address = data[i].address;
+						username = username + "[" + data[i].telephone + "]";
+						$("#noassociationSelect").append("<option title='"+address+"' value='"+id+"'>"+username+"</option>")
+					}
+				},"json");
+				
+				//异步查询与此定区关联的所有客户                                  因为struts2拦截url改为了.action,这之前没加所以报404
+				$.post("../../fixedAreaAction_findCustomersHasAssociation.action",{"id":rows[0].id},function(data){
+					for(var i = 0;i < data.length; i++){
+						var id = data[i].id;
+						var username = data[i].username;
+						var address = data[i].address;
+						username = username + "[" + data[i].telephone + "]";
+						$("#associationSelect").append("<option title='"+address+"' value='"+id+"'>"+username+"</option>")
+					}
+				},"json");
+				
+			}
+			
+			//关联分区
+			function doAssociation2SubArea(){
+				var rows = $("#grid").datagrid("getSelections");
+				if(rows.length != 1){
+					$.messager.alert("提示信息","只能选择一个定区与客户关联！");
+					return;
+				}
+				$("#subAreaWindow").window("open");
+				//清除数据
+				$("#noassociationSelectOfSubArea").empty();
+				$("#associationSelectOfSubArea").empty();
+				
+				//发送异步请求未与定区关联的分区
+				$.post("../../fixedAreaAction_findAllSubAreaNoAssociation.action",function(data){
+					for(var i = 0;i < data.length;i++){
+						var id = data[i].id;
+						var address = data[i].address;
+						var keyWords = data[i].keyWords;
+						var assistKeyWords = data[i].assistKeyWords;
+						$("#noassociationSelectOfSubArea").append("<option title='"+assistKeyWords+"' value='"+id+"'>"
+								+address+"["+keyWords+"]"
+								+"</option>");
+					}
+				},"json")
+				//发送异步请求与定区关联的分区
+				$.post("../../fixedAreaAction_findAllSubAreaHasAssociation.action",{"id":rows[0].id},function(data){
+					for(var i = 0;i < data.length;i++){
+						var id = data[i].id;
+						var address = data[i].address;
+						var keyWords = data[i].keyWords;
+						var assistKeyWords = data[i].assistKeyWords;
+						$("#associationSelectOfSubArea").append("<option title='"+assistKeyWords+"' value='"+id+"'>"
+								+address+"["+keyWords+"]"
+								+"</option>");
+					}
+				},"json")
+			}
+			
+			//工具栏
+			var toolbar = [ {
+				id : 'button-search',	
+				text : '查询',
+				iconCls : 'icon-search',
+				handler : doSearch
+			}, {
+				id : 'button-add',
+				text : '增加',
+				iconCls : 'icon-add',
+				handler : doAdd
+			}, {
+				id : 'button-edit',	
+				text : '修改',
+				iconCls : 'icon-edit',
+				handler : doEdit
+			},{
+				id : 'button-delete',
+				text : '删除',
+				iconCls : 'icon-cancel',
+				handler : doDelete
+			},{
+				id : 'button-exportPDF',
+				text : '导出定区客户pdf',
+				iconCls : 'icon-undo',
+				handler : doExportPDF
+			},{
+				id : 'button-exportXls',
+				text : '导出定区客户Xls',
+				iconCls : 'icon-undo',
+				handler : doExportXls
+			},{
+				id : 'button-association',
+				text : '关联客户',
+				iconCls : 'icon-sum',
+				handler : doAssociations
+			},{
+				id : 'button-association-courier',
+				text : '关联快递员',
+				iconCls : 'icon-sum',
+				handler : function(){
+					// 判断是否已经选中了一个定区，弹出关联快递员窗口 
+					var rows = $("#grid").datagrid('getSelections');
+					if(rows.length==1){
+						// 只选择了一个定区
+						// 弹出定区关联快递员 窗口 
+						$("#courierWindow").window('open');
+						$("#courierId").combobox({url:'../../courierAction_listajax.action'});
+						$("#takeTimeId").combobox({url:'../../taketimeAction_listajax.action'});
+					}else{
+						// 没有选中定区，或者选择 了多个定区
+						$.messager.alert("警告","关联快递员,只能（必须）选择一个定区","warning");
+					}
+				}
+			},{
+				id : 'button-association2',
+				text : '关联分区',
+				iconCls : 'icon-sum',
+				handler : doAssociation2SubArea
+			}];
+			// 定义列
+			var columns = [ [ {
+				field : 'id',
+				title : '编号',
+				width : 80,
+				align : 'center',
+				checkbox:true
+			},{
+				field : 'fixedAreaName',
+				title : '定区名称',
+				width : 120,
+				align : 'center'
+			}, {
+				field : 'fixedAreaLeader',
+				title : '负责人',
+				width : 120,
+				align : 'center'
+			}, {
+				field : 'telephone',
+				title : '联系电话',
+				width : 120,
+				align : 'center'
+			}, {
+				field : 'company',
+				title : '所属公司',
+				width : 120,
+				align : 'center'
+			} ] ];
+			
+			$(function(){
+				// 先将body隐藏，再显示，不会出现页面刷新效果
+				$("body").css({visibility:"visible"});
+				
+				// 定区数据表格
+				$('#grid').datagrid( {
+					iconCls : 'icon-forward',
+					fit : true,
+					border : true,
+					rownumbers : true,
+					striped : true,
+					pageList: [30,50,100],
+					pagination : true,
+					toolbar : toolbar,
+					url : "../../fixedAreaAction_pageQuery.action",
+					idField : 'id',
+					columns : columns,
+					onDblClickRow : function(rowIndex,rowData){
+						doDblClickRow(rowData)
+					}
+				});
+				
+				// 添加、修改定区
+				$('#addWindow').window({
+			        title: '添加修改定区',
+			        width: 600,
+			        modal: true,
+			        shadow: true,
+			        closed: true,
+			        height: 400,
+			        resizable:false
+			    });
+				
+				// 查询定区
+				$('#searchWindow').window({
+			        title: '查询定区',
+			        width: 400,
+			        modal: true,
+			        shadow: true,
+			        closed: true,
+			        height: 400,
+			        resizable:false
+			    });
+				$.fn.serializeJson = function(){
+					var serializeObj = {};
+					var array = this.serializeArray();
+					var str = this.serialize();
+					$(array).each(function(){
+						if(serializeObj[this.name]){
+							if($.isArray(serializeObj[this.name])){
+								serializeObj[this.name].push(this.value);
+							}else{
+								serializeObj[this.name] = [serializeObj[this.name],this.value];
+							}
+						}else{
+							serializeObj[this.name] = this.value;
+						}
+					});
+					return serializeObj;
+				};
+				$("#btn").click(function(){
+					//根据条件查询定区
+					$("#grid").datagrid("load",$("#searchForm").serializeJson());
+					$("#searchWindow").window("close");
+				});
+				
+			});
+		
+			function doDblClickRow(rowData){
+				var id = rowData.id;
+				$('#association_subarea').datagrid( {
+					fit : true,
+					border : true,
+					rownumbers : true,
+					striped : true,
+					url : "../../fixedAreaAction_findAllSubAreaHasAssociation.action",
+					queryParams :{id : id},
+					columns : [ [{
+						field : 'id',
+						title : '分拣编号',
+						width : 120,
+						align : 'center'
+					},{
+						field : 'area.province',
+						title : '省',
+						width : 120,
+						align : 'center',
+						formatter : function(data,row ,index){
+							if(row.area!=null){
+								return row.area.province;
+							}
+							return "";
+						}
+					}, {
+						field : 'area.city',
+						title : '市',
+						width : 120,
+						align : 'center',
+						formatter : function(data,row ,index){
+							if(row.area!=null){
+								return row.area.city;
+							}
+							return "";
+						}
+					}, {
+						field : 'area.district',
+						title : '区',
+						width : 120,
+						align : 'center',
+						formatter : function(data,row ,index){
+							if(row.area!=null){
+								return row.area.district;
+							}
+							return "";
+						}
+					}, {
+						field : 'keyWords',
+						title : '关键字',
+						width : 120,
+						align : 'center'
+					}, {
+						field : 'startNum',
+						title : '起始号',
+						width : 100,
+						align : 'center'
+					}, {
+						field : 'endNum',
+						title : '终止号',
+						width : 100,
+						align : 'center'
+					} , {
+						field : 'single',
+						title : '单双号',
+						width : 100,
+						align : 'center'
+					} , {
+						field : 'address',
+						title : '位置',
+						width : 200,
+						align : 'center'
+					} ] ]
+				});
+				$('#association_customer').datagrid( {
+					fit : true,
+					border : true,
+					rownumbers : true,
+					striped : true,
+					url : "../../fixedAreaAction_findCustomersHasAssociation.action",
+					queryParams :{id : id},
+					columns : [[{
+						field : 'id',
+						title : '客户编号',
+						width : 120,
+						align : 'center'
+					},{
+						field : 'username',
+						title : '客户名称',
+						width : 120,
+						align : 'center'
+					}, {
+						field : 'company',
+						title : '所属单位',
+						width : 120,
+						align : 'center'
+					}]]
+				});
+				$('#association_couriers').datagrid( {
+					fit : true,
+					border : true,
+					rownumbers : true,
+					striped : true,
+					url : "../../fixedAreaAction_findAllCourierHasAssociation.action",
+					queryParams :{id : id},
+					columns : [[{
+						field : 'courierNum',
+						title : '工号',
+						width : 120,
+						align : 'center'
+					},{
+						field : 'name',
+						title : '姓名',
+						width : 120,
+						align : 'center'
+					}, {
+						field : 'telephone',
+						title : '手机',
+						width : 120,
+						align : 'center'
+					}]]
+				});
+				
+			}
+		</script>
+	</head>
+
+	<body class="easyui-layout" style="visibility:hidden;">
+		<div region="center" border="false">
+			<table id="grid"></table>
+		</div>
+		<div region="south" border="false" style="height:150px">
+			<div id="tabs" fit="true" class="easyui-tabs">
+				<div title="关联分区" id="subArea" style="width:100%;height:100%;overflow:hidden">
+					<table id="association_subarea"></table>
+				</div>
+				<div title="关联客户" id="customers" style="width:100%;height:100%;overflow:hidden">
+					<table id="association_customer"></table>
+				</div>
+				<div title="关联快递员" id="couriers" style="width:100%;height:100%;overflow:hidden">
+					<table id="association_couriers"></table>
+				</div>
+			</div>
+		</div>
+
+		<!-- 添加 修改定区 -->
+		<div class="easyui-window" title="定区添加修改" id="addWindow" collapsible="false" minimizable="false" maximizable="false" style="top:20px;left:200px">
+			<div style="height:31px;overflow:hidden;" split="false" border="false">
+				<div class="datagrid-toolbar">
+					<a id="save" icon="icon-save" href="#" class="easyui-linkbutton" plain="true">保存</a>
+					<script type="text/javascript">
+						$(function(){
+							$("#save").click(function(){
+								$("#fixedAreaSaveForm").submit();
+							});
+						});
+					</script>
+					</script>
+				</div>
+			</div>
+
+			<div style="overflow:auto;padding:5px;" border="false">
+				<form id="fixedAreaSaveForm" method="post" action="../../fixedAreaAction_save.action">
+					<table class="table-edit" width="80%" align="center">
+						<tr class="title">
+							<td colspan="2">定区信息</td>
+						</tr>
+						<tr>
+							<td>定区编码</td>
+							<td><input type="text" name="id" class="easyui-validatebox"
+								required="true" /></td>
+						</tr>
+						<tr>
+							<td>定区名称</td>
+							<td><input type="text" name="fixedAreaName"
+								class="easyui-validatebox" required="true" /></td>
+						</tr>
+						<tr>
+							<td>负责人</td>
+							<td><input type="text" name="fixedAreaLeader"
+								class="easyui-validatebox" required="true" /></td>
+						</tr>
+						<tr>
+							<td>联系电话</td>
+							<td><input type="text" name="telephone"
+								class="easyui-validatebox" required="true" /></td>
+						</tr>
+						<tr>
+							<td>所属公司</td>
+							<td><input type="text" name="company"
+								class="easyui-validatebox" required="true" /></td>
+						</tr>
+					</table>
+				</form>
+			</div>
+		</div>
+		<!-- 查询定区 -->
+		<div class="easyui-window" title="查询定区窗口" id="searchWindow" collapsible="false" minimizable="false" maximizable="false" style="top:20px;left:200px">
+			<div style="overflow:auto;padding:5px;" border="false">
+				<form id="searchForm" action="../../fixedAreaAction_pageQuery.action" method="post">
+					<table class="table-edit" width="80%" align="center">
+						<tr class="title">
+							<td colspan="2">查询条件</td>
+						</tr>
+						<tr>
+							<td>定区编码</td>
+							<td>
+								<input type="text" name="id" class="easyui-validatebox" required="true" />
+							</td>
+						</tr>
+						<tr>
+							<td>所属单位</td>
+							<td>
+								<input type="text" name="company" class="easyui-validatebox" required="true" />
+							</td>
+						</tr>
+						<tr>
+							<td>分区</td>
+							<td>
+								<input type="text" name="subareaName" class="easyui-validatebox" required="true" />
+							</td>
+						</tr>
+						<tr>
+							<td colspan="2"><a id="btn" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-search'">查询</a> </td>
+						</tr>
+					</table>
+				</form>
+			</div>
+		</div>
+
+		<!-- 关联客户窗口 -->
+		<div modal="true" class="easyui-window" title="关联客户窗口" id="customerWindow" collapsible="false" closed="true" minimizable="false" maximizable="false" style="top:20px;left:200px;width: 400px;height: 300px;">
+			<div style="overflow:auto;padding:5px;" border="false">
+				<form id="customerForm" action="../../fixedAreaAction_assignCustomers2FixedArea.action" method="post">
+					<table class="table-edit" width="80%" align="center">
+						<tr class="title">
+							<td colspan="3">关联客户</td>
+						</tr>
+						<tr>
+							<td>
+								<input type="hidden" name="id" id="customerFixedAreaId" />
+								<select id="noassociationSelect" multiple="multiple" size="10"></select>
+							</td>
+							<td>
+								<input type="button" value="》》" id="toRight">
+								<br/>
+								<input type="button" value="《《" id="toLeft">
+								<script type="text/javascript">
+									$(function(){
+										//给>>绑定事件
+										$("#toRight").click(function(){
+											$("#associationSelect").append($("#noassociationSelect option:selected"));
+										});
+										//给<<绑定事件
+										$("#toLeft").click(function(){
+											$("#noassociationSelect").append($("#associationSelect option:selected"));
+										});
+										$("#associationBtn").click(function(){
+											var rows = $("#grid").datagrid("getSelections");
+											//给id赋值
+											$("#customerFixedAreaId").val(rows[0].id);
+											//选中所有option
+											$("#associationSelect option").attr("selected","selected");
+											$("#customerForm").submit();
+										});
+									});
+								</script>
+							</td>
+							<td>
+								<select id="associationSelect" name="customerIds" multiple="multiple" size="10"></select>
+							</td>
+						</tr>
+						<tr>
+							<td colspan="3"><a id="associationBtn" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-save'">关联客户</a> </td>
+						</tr>
+					</table>
+				</form>
+			</div>
+		</div>
+		
+		<!-- 关联快递员窗口 -->
+		<div class="easyui-window" title="关联快递员窗口" id="courierWindow" modal="true"
+			collapsible="false" closed="true" minimizable="false" maximizable="false" style="top:20px;left:200px;width: 700px;height: 300px;">
+			<div style="overflow:auto;padding:5px;" border="false">
+				<form id="courierForm" 
+					action="../../fixedAreaAction_associationCourier2FixedArea.action" method="post">
+					<table class="table-edit" width="80%" align="center">
+						<tr class="title">
+							<td colspan="2">关联快递员</td>
+						</tr> 
+						<tr>
+							<td>选择快递员</td>
+							<td>
+								<!-- 存放定区编号 -->
+								<input type="hidden" name="id" id="courierFixedAreaId" />
+								<input id="courierId" data-options="ditable:false,valueField:'id',textField:'name'"
+									 type="text" name="courierId" class="easyui-combobox" required="true" />
+							</td>
+						</tr>
+						<tr>
+							<td>选择收派时间</td>
+							<td>
+								<input id="takeTimeId" data-options="ditable:false,valueField:'id',textField:'name'"
+									 type="text" name="takeTimeId" class="easyui-combobox" required="true" />
+							</td>
+						</tr>
+						<tr>
+							<td colspan="3">
+								<a id="associationCourierBtn" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-save'">关联快递员</a>
+								<script type="text/javascript">
+									//定区与快递员和收派时间关联
+									$(function(){
+										$("#associationCourierBtn").click(function(){
+											//获取定区的id
+											var rows = $("#grid").datagrid("getSelections");
+											$("#courierFixedAreaId").val(rows[0].id);
+											$("#courierForm").submit();
+										});
+									});
+								</script>
+							 </td>
+						</tr>
+					</table>
+				</form>
+			</div>
+		</div>
+		
+		
+		<!-- 关联分区窗口 -->
+		<div modal="true" class="easyui-window" title="关联分区窗口" id="subAreaWindow" collapsible="false" closed="true" minimizable="false" maximizable="false" style="top:20px;left:200px;width: 600px;height: 300px;">
+			<div style="overflow:auto;padding:5px;" border="false">
+				<form id="subAreaForm" action="../../fixedAreaAction_assignSubAreas2FixedArea.action" method="post">
+					<table class="table-edit" width="80%" align="center">
+						<tr class="title">
+							<td colspan="3">关联分区</td>
+						</tr>
+						<tr>
+							<td>
+								<input type="hidden" name="id" id="subAreaFixedAreaId" />
+								<select id="noassociationSelectOfSubArea" multiple="multiple" size="10"></select>
+							</td>
+							<td>
+								<input type="button" value="》》" id="toRightOfSubArea">
+								<br/>
+								<input type="button" value="《《" id="toLeftOfSubArea">
+								<script type="text/javascript">
+									
+								</script>
+							</td>
+							<td>
+								<select id="associationSelectOfSubArea" name="subAreaIds" multiple="multiple" size="10"></select>
+							</td>
+						</tr>
+						<tr>
+							<td colspan="3">
+							<a id="associationBtnOfSubArea" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-save'">关联分区</a> 
+							<script type="text/javascript">
+								$(function(){
+									$("#toRightOfSubArea").click(function(){
+										$("#associationSelectOfSubArea").append($("#noassociationSelectOfSubArea option:selected"));
+									});
+									$("#toLeftOfSubArea").click(function(){
+										$("#noassociationSelectOfSubArea").append($("#associationSelectOfSubArea option:selected"));
+									});
+									$("#associationBtnOfSubArea").click(function(){
+										var rows = $("#grid").datagrid("getSelections");
+										$("#subAreaFixedAreaId").val(rows[0].id);
+										$("#associationSelectOfSubArea option").attr("selected","selected");
+										
+										//提交表单
+										$("#subAreaForm").submit();
+									});
+								});
+							</script>
+							</td>
+						</tr>
+					</table>
+				</form>
+			</div>
+		</div>
+		<!-- 关联分区结束 -->
+	</body>
+
+</html>

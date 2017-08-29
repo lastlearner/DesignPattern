@@ -1,0 +1,44 @@
+package com.itheima.bos.web.action.take_delivery;
+
+import java.io.IOException;
+
+import javax.servlet.Servlet;
+
+import org.apache.struts2.ServletActionContext;
+import org.apache.struts2.convention.annotation.Action;
+import org.apache.struts2.convention.annotation.Namespace;
+import org.apache.struts2.convention.annotation.ParentPackage;
+import org.apache.struts2.convention.annotation.Result;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Controller;
+import com.itheima.bos.domain.take_delivery.WayBill;
+import com.itheima.bos.service.take_delivery.WaybillService;
+import com.itheima.bos.web.action.common.CommonAction;
+
+/**
+ * 运单管理
+ * @author zhaoqx
+ *
+ */
+@Controller
+@Scope("prototype")
+@Namespace("/")
+@ParentPackage("struts-default")
+public class WaybillAction extends CommonAction<WayBill>{
+	@Autowired
+	private WaybillService service;
+	
+	@Action(value="waybillAction_save")
+	public String save() throws IOException{
+		String f = "1";
+		try{
+			service.save(getModel());
+		}catch(Exception e){
+			f = "0";
+		}
+		ServletActionContext.getResponse().setContentType("text/html;charset=UTF-8");
+		ServletActionContext.getResponse().getWriter().print(f);
+		return NONE;
+	}
+}

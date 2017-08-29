@@ -1,0 +1,31 @@
+package com.itheima.bos.service.base.impl;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.itheima.bos.dao.base.SubareaDao;
+import com.itheima.bos.domain.base.SubArea;
+import com.itheima.bos.service.base.SubareaService;
+@Service
+@Transactional
+public class SubareaServiceImpl implements SubareaService{
+	@Autowired
+	private SubareaDao dao;
+	
+	public void save(SubArea model) {
+		//model.setId(UUID.randomUUID().toString());
+		dao.save(model);
+	}
+
+	public List<SubArea> findAll() {
+		return dao.findAll();
+	}
+
+	public List<Object[]> showChart() {
+		return dao.showChart();
+	}
+}
